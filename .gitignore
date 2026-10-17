@@ -3,6 +3,7 @@ node_modules/
 out/
 dist/
 coverage/
+debug.log
 .env
 .env.*
 !.env.example
@@ -12,5 +13,7 @@ prisma/*.db-journal
 prisma/phase2-test.db
 uploads/
 .private-uploads/
+src/generated/prisma/
+tsconfig.tsbuildinfo
 .DS_Store
 Thumbs.db

@@ -1,8 +1,12 @@
 import { createBrowserClient } from "@supabase/ssr";
 
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL=https://rjkjncrpvvcsddsnpjwg.supabase.co/rest/v1/
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_vTtbCedJsNWzNzqk4C5Jvg_3Sa-tBtO
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!url || !publishableKey) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be configured.");
+  }
+
+  return createBrowserClient(url, publishableKey);
 }
