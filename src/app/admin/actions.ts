@@ -1,0 +1,20 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { assignPlatformSubscription, createPlatformPlan, reviewPlatformPayment, updatePlatformPlan, updatePlatformShopStatus, updatePlatformSubscription, updatePlatformUserStatus } from "@/server/platform/admin";
+
+const str = (form: FormData, key: string) => String(form.get(key) ?? "").trim();
+const num = (form: FormData, key: string, min = 0, max = 2_147_483_647) => { const v = Number(str(form, key)); if (!Number.isSafeInteger(v) || v < min || v > max) throw new Error("Invalid form value."); return v; };
+const nullableNum = (form: FormData, key: string, max = 1_000_000) => str(form, key) ? num(form, key, 1, max) : null;
+function go(message: string, path = "/admin"): never { revalidatePath("/admin"); redirect(`${path}?message=${encodeURIComponent(message)}`); }
+function planData(form: FormData) { return { name: str(form, "name"), monthlyPriceCents: num(form, "monthlyPriceCents"), yearlyPriceCents: num(form, "yearlyPriceCents"), trialDays: num(form, "trialDays", 0, 365), graceDays: num(form, "graceDays", 0, 90), maxUsers: nullableNum(form, "maxUsers"), maxProducts: nullableNum(form, "maxProducts"), maxInvoicesPerMonth: nullableNum(form, "maxInvoicesPerMonth"), features: str(form, "features") }; }
+async function run(work: () => Promise<unknown>, success: string, failure: string, path = "/admin") { try { await work(); } catch { go(failure, path); } go(success, path); }
+
+export async function createPlanAction(form: FormData) { return run(() => createPlatformPlan(planData(form)), "Plan created.", "Could not create plan. Check all fields."); }
+export async function updatePlanAction(planId: string, form: FormData) { return run(() => updatePlatformPlan(planId, { ...planData(form), status: str(form, "status") === "ARCHIVED" ? "ARCHIVED" : "ACTIVE" }), "Plan updated.", "Could not update plan. Check all fields."); }
+export async function assignSubscriptionAction(form: FormData) { return run(() => { const status = str(form, "status") === "TRIAL" ? "TRIAL" : "ACTIVE"; const startsAt = new Date(`${str(form, "startsAt")}T00:00:00.000Z`); const endText = str(form, "endsAt"); return assignPlatformSubscription({ shopId: str(form, "shopId"), planId: str(form, "planId"), interval: str(form, "interval") === "YEARLY" ? "YEARLY" : "MONTHLY", status, startsAt, endsAt: endText ? new Date(`${endText}T23:59:59.999Z`) : null }); }, "Subscription assigned.", "Could not assign subscription. Check the shop, plan, and dates."); }
+export async function updateSubscriptionAction(subscriptionId: string, form: FormData) { return run(() => { const state = str(form, "status"); const status = ["TRIAL", "ACTIVE", "SUSPENDED", "CANCELLED"].includes(state) ? state as "TRIAL" | "ACTIVE" | "SUSPENDED" | "CANCELLED" : "SUSPENDED"; const endText = str(form, "endsAt"); return updatePlatformSubscription(subscriptionId, status, endText ? new Date(`${endText}T23:59:59.999Z`) : null); }, "Subscription updated.", "Could not update subscription."); }
+export async function updateShopStatusAction(shopId: string, form: FormData) { return run(() => { const status = str(form, "status"); if (status !== "ACTIVE" && status !== "SUSPENDED") throw new Error("Invalid shop status."); return updatePlatformShopStatus(shopId, status); }, "Shop status updated.", "Could not update shop status."); }
+export async function updatePlatformUserStatusAction(userId: string, form: FormData) { return run(() => { const status = str(form, "status"); if (status !== "ACTIVE" && status !== "SUSPENDED") throw new Error("Invalid account status."); return updatePlatformUserStatus(userId, status); }, "Account status updated.", "Could not update account status."); }
+export async function reviewPaymentAction(paymentId: string, form: FormData) { return run(() => reviewPlatformPayment(paymentId, str(form, "decision") === "APPROVED" ? "APPROVED" : "REJECTED", str(form, "note")), "Payment reviewed.", "Could not review payment. Verify its amount and status."); }

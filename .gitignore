@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+!.env.test.example
+prisma/*.db
+prisma/*.db-journal
+prisma/phase2-test.db
+uploads/
+.private-uploads/
+.DS_Store
+Thumbs.db
