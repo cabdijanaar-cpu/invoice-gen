@@ -3,6 +3,7 @@ import { CustomerForm } from "./customer-form";
 import { listShopCustomers } from "@/server/shops/customers";
 import { requireShopMembership } from "@/server/auth/session";
 import { CustomerManagement } from "./customer-management";
+import { WorkspacePageHeader } from "../workspace-page-header";
 
 export default async function CustomersPage({ params, searchParams }: { params: Promise<{ shopId: string }>; searchParams: Promise<{ q?: string; page?: string }> }) {
   const { shopId } = await params;
@@ -18,12 +19,9 @@ export default async function CustomersPage({ params, searchParams }: { params: 
   const canManage = membership.role === "SHOP_OWNER" || membership.canManageCustomers;
 
   return (
-    <main className="min-h-screen px-5 py-8 sm:px-10">
-      <div className="mx-auto max-w-5xl">
-        <header className="mt-5 flex flex-wrap items-end justify-between gap-3 rounded-3xl border border-white bg-white px-5 py-5 shadow-sm sm:px-7">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--forest)]">{membership.shop.name}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Customers</h1><p className="mt-1 text-sm text-[var(--muted)]">Keep customer details and payment history together.</p></div>
-          <span className="rounded-full bg-[#edf6df] px-3 py-1.5 text-xs font-semibold text-[var(--forest)]">{result.total} customers</span>
-        </header>
+    <main className="min-h-screen px-4 py-7 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-6xl">
+        <WorkspacePageHeader shopName={membership.shop.name} title="Customers" description="Keep customer details and payment history together." badge={`${result.total} customers`} />
         <div className="mt-6 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
           {canManage ? <CustomerForm shopId={shopId} /> : <p className="rounded-2xl border border-[var(--line)] bg-white p-5 text-sm text-[var(--muted)]">You can view customers but do not have permission to add them.</p>}
           <section>

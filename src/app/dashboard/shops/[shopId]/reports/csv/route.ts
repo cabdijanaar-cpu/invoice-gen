@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireShopPermission } from "@/server/auth/session";
+import { formatCsvCell } from "@/server/domain/reports/csv";
 import { getShopReport, reportRange } from "@/server/shops/reports";
-function cell(value: string | number | Date | null) { if (typeof value === "number") return String(value); let text = value instanceof Date ? value.toISOString() : String(value ?? ""); if (/^[=+@\-\t\r]/.test(text)) text = `'${text}`; return `"${text.replaceAll('"', '""')}"`; }
 export async function GET(request: NextRequest, { params }: { params: Promise<{ shopId: string }> }) {
   const { shopId } = await params;
   try {
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     for (const movement of report.movements) lines.push(["stock_movement", null, null, null, movement.type, null, null, null, movement.quantityMilli, null, null, movement.count]);
     for (const product of report.products) lines.push(["inventory_stock", null, product.sku, "ACTIVE", null, product.name, null, null, null, product.stockQuantityMilli, product.unit, product.lowStockThresholdMilli]);
     for (const product of report.lowStock) lines.push(["low_stock", null, product.sku, null, null, product.name, null, null, null, product.stockQuantityMilli, product.unit, null]);
-    const csv = `\uFEFF${lines.map((row) => row.map(cell).join(",")).join("\r\n")}`;
+    const csv = `\uFEFF${lines.map((row) => row.map(formatCsvCell).join(",")).join("\r\n")}`;
     return new NextResponse(csv, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="shop-report-${range.fromText}-${range.toText}.csv"`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   } catch { return new NextResponse("Report unavailable", { status: 403 }); }
 }

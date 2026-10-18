@@ -11,7 +11,21 @@ export async function createExpenseAction(shopId: string, _previous: ExpenseStat
   if (!parsed.success) return { error: "Check the expense details and try again." };
   const amountCents = parseMoneyToCents(parsed.data.amount);
   if (!amountCents) return { error: "Enter a positive amount with up to two decimal places." };
-  try { await createShopExpense(shopId, { ...parsed.data, amountCents, incurredAt: new Date(`${parsed.data.incurredAt}T12:00:00.000Z`) }); revalidatePath(`/dashboard/shops/${shopId}`); revalidatePath(`/dashboard/shops/${shopId}/expenses`); revalidatePath(`/dashboard/shops/${shopId}/reports`); return { success: "Expense recorded." }; }
+  try {
+    await createShopExpense(shopId, {
+      category: parsed.data.category,
+      description: parsed.data.description,
+      amountCents,
+      method: parsed.data.method || undefined,
+      reference: parsed.data.reference || undefined,
+      notes: parsed.data.notes || undefined,
+      incurredAt: new Date(`${parsed.data.incurredAt}T12:00:00.000Z`),
+    });
+    revalidatePath(`/dashboard/shops/${shopId}`);
+    revalidatePath(`/dashboard/shops/${shopId}/expenses`);
+    revalidatePath(`/dashboard/shops/${shopId}/reports`);
+    return { success: "Expense recorded." };
+  }
   catch (e) { const m = e instanceof Error ? e.message : "Expense could not be recorded."; return { error: m.includes("permission") ? m : "Expense could not be recorded. Check the details and try again." }; }
 }
 export async function reverseExpenseAction(shopId: string, expenseId: string, _previous: ExpenseState, formData: FormData): Promise<ExpenseState> {

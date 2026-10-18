@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { calculateInvoice } from "./calculate-invoice";
+import { calculateDefaultInvoiceDiscountCents, calculateInvoice } from "./calculate-invoice";
 
 describe("calculateInvoice", () => {
+  it("calculates the default percentage discount after line discounts with half-up rounding", () => {
+    expect(calculateDefaultInvoiceDiscountCents(
+      [{ quantityMilli: 1_000, unitPriceCents: 999, lineDiscountCents: 100 }],
+      1_000,
+    )).toBe(90);
+  });
+
+  it("rejects a default percentage above 100%", () => {
+    expect(() => calculateDefaultInvoiceDiscountCents(
+      [{ quantityMilli: 1_000, unitPriceCents: 100 }],
+      10_001,
+    )).toThrow("Default discount rate cannot exceed 10000 basis points.");
+  });
+
   it("calculates fractional quantities, line discounts, and tax in integer cents", () => {
     const result = calculateInvoice({
       lines: [{ quantityMilli: 1_500, unitPriceCents: 1_000, lineDiscountCents: 100, taxRateBps: 1_000 }],

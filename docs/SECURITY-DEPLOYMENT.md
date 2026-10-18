@@ -1,6 +1,6 @@
 # Security and deployment notes
 
-**Status:** initial authentication and tenant-authorization controls are implemented and covered by tests, including the PostgreSQL integration suite (44 tests across 9 files). This is not a production security review or deployment configuration.
+**Status:** initial authentication and tenant-authorization controls are implemented and covered by tests, including the PostgreSQL integration suite (57 tests across 11 files). Report CSV output also neutralizes formula-like text values. This is not a production security review or deployment configuration.
 
 ## Authorization baseline
 

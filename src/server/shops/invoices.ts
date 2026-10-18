@@ -380,7 +380,7 @@ export async function createFinalizedInvoice(shopId: string, input: CreateInvoic
         await tx.auditLog.create({ data: { actorId: user.id, shopId, action: "QUOTATION_CONVERTED", entityType: "Quotation", entityId: input.quotationId, summary: `Converted ${invoiceNumber}` } });
       }
       return { ...invoice, duplicate: false as const };
-    });
+    }, { timeout: 30_000 });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const existing = await db.invoice.findUnique({

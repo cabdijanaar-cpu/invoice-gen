@@ -5,6 +5,7 @@ import { listShopProducts } from "@/server/shops/products";
 import { ProductForm } from "./product-form";
 import { StockAdjustment } from "./stock-adjustment";
 import { ProductManagement } from "./product-management";
+import { WorkspacePageHeader } from "../workspace-page-header";
 
 function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -25,12 +26,9 @@ export default async function ProductsPage({ params, searchParams }: { params: P
   const canAdjust = membership.role === "SHOP_OWNER" || membership.canAdjustInventory;
 
   return (
-    <main className="min-h-screen px-5 py-8 sm:px-10">
+    <main className="min-h-screen px-4 py-7 sm:px-8 sm:py-10">
       <div className="mx-auto max-w-6xl">
-        <header className="mt-5 flex flex-wrap items-end justify-between gap-3 rounded-3xl border border-white bg-white px-5 py-5 shadow-sm sm:px-7">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--forest)]">{membership.shop.name}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Products &amp; inventory</h1><p className="mt-1 text-sm text-[var(--muted)]">Manage pricing, availability, and stock movement.</p></div>
-          <span className="rounded-full bg-[#edf6df] px-3 py-1.5 text-xs font-semibold text-[var(--forest)]">{result.total} products</span>
-        </header>
+        <WorkspacePageHeader shopName={membership.shop.name} title="Products & inventory" description="Manage pricing, availability, and stock movement." badge={`${result.total} products`} />
         <div className="mt-6 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
           {canManage ? <ProductForm shopId={shopId} /> : <p className="rounded-2xl border border-[var(--line)] bg-white p-5 text-sm text-[var(--muted)]">You can view inventory but do not have permission to add products.</p>}
           <section>

@@ -32,6 +32,7 @@ import { getShopDashboardStats } from "@/server/shops/dashboard";
 import { addShopMember, listShopMembers, updateShopMember } from "@/server/shops/members";
 import { createShopExpense, reverseShopExpense } from "@/server/shops/expenses";
 import { getShopReport, reportRange } from "@/server/shops/reports";
+import { getShopSettings } from "@/server/shops/settings";
 import { assignPlatformSubscription, createPlatformPlan, getPlatformOverview, reviewPlatformPayment, submitShopSubscriptionPayment, updatePlatformShopStatus, updatePlatformSubscription, updatePlatformUserStatus } from "@/server/platform/admin";
 import { createFinalizedInvoice, getShopInvoice, recordInvoicePayment, recordInvoiceRefund, reverseInvoicePayment, saveShopInvoiceDraft, voidFinalizedInvoice } from "@/server/shops/invoices";
 import { convertAcceptedQuotation, createShopQuotation, transitionShopQuotation } from "@/server/shops/quotations";
@@ -43,6 +44,7 @@ import { loginAction, logoutAction, registerAction } from "@/app/(auth)/actions"
 import { createCustomerAction } from "@/app/dashboard/shops/[shopId]/customers/actions";
 import { GET as invoicePdfRoute } from "@/app/dashboard/shops/[shopId]/invoices/[invoiceId]/pdf/route";
 import { GET as reportCsvRoute } from "@/app/dashboard/shops/[shopId]/reports/csv/route";
+import { updateSettingsAction } from "@/app/dashboard/shops/[shopId]/settings/actions";
 
 async function clearDatabase() {
   await db.$executeRaw`TRUNCATE TABLE
@@ -180,6 +182,41 @@ describe("shop tenant isolation", () => {
     await expect(getShopEntitlement(graceShop.id)).resolves.toMatchObject({ hasAccess: true });
     await db.subscription.update({ where: { id: graceSubscription.id }, data: { endsAt: new Date(Date.now() - 4 * 86_400_000) } });
     await expect(getShopEntitlement(graceShop.id)).resolves.toMatchObject({ hasAccess: false });
+  });
+
+  it("updates shop settings for authorized owners and denies unprivileged managers", async () => {
+    const owner = await db.user.create({ data: { name: "Settings Owner", email: "settings-owner@example.test", passwordHash: "test-hash" }, select: { id: true } });
+    const manager = await db.user.create({ data: { name: "Settings Manager", email: "settings-manager@example.test", passwordHash: "test-hash" }, select: { id: true } });
+    const shop = await db.shop.create({ data: { name: "Settings Shop", createdById: owner.id, memberships: { create: { userId: owner.id, role: "SHOP_OWNER" } }, settings: { create: {} } }, select: { id: true } });
+    const formValues = {
+      legalName: "Settings Shop LLC", address: "12 Test Road", phone: "+15555550123", email: "office@example.test",
+      website: "https://example.test", taxId: "TEST-123", invoicePrefix: "SALE", quotationPrefix: "OFFER",
+      defaultPaymentTerms: "Due in 15 days", defaultTaxRate: "5.25", defaultDiscount: "1.25",
+      primaryColor: "#123ABC", footer: "Thank you for your business.", template: "MODERN",
+    };
+    const settingsForm = (values: Record<string, string>) => {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(values)) form.set(key, value);
+      return form;
+    };
+    const expectedSettings = {
+      legalName: formValues.legalName, address: formValues.address, phone: formValues.phone, email: formValues.email,
+      website: formValues.website, taxId: formValues.taxId, invoicePrefix: formValues.invoicePrefix, quotationPrefix: formValues.quotationPrefix,
+      defaultPaymentTerms: formValues.defaultPaymentTerms, defaultTaxRateBps: 525, defaultDiscountBps: 125,
+      primaryColor: formValues.primaryColor, footer: formValues.footer, template: formValues.template,
+    };
+
+    await createSession(owner.id);
+    await expect(updateSettingsAction(shop.id, {}, settingsForm(formValues))).resolves.toEqual({ success: "Settings saved." });
+    await expect(getShopSettings(shop.id)).resolves.toMatchObject({ name: "Settings Shop", settings: expectedSettings });
+    await expect(updateSettingsAction(shop.id, {}, settingsForm({ ...formValues, email: "invalid-email" }))).resolves.toEqual({ error: "Check the settings and try again." });
+    await expect(db.auditLog.findMany({ where: { shopId: shop.id, action: "SHOP_SETTINGS_UPDATED" }, select: { actorId: true } })).resolves.toEqual([{ actorId: owner.id }]);
+
+    await db.shopMembership.create({ data: { userId: manager.id, shopId: shop.id, role: "MANAGER" } });
+    await createSession(manager.id);
+    await expect(getShopSettings(shop.id)).rejects.toThrow("permission");
+    await expect(updateSettingsAction(shop.id, {}, settingsForm({ ...formValues, invoicePrefix: "DENIED" }))).resolves.toEqual({ error: "You do not have permission to perform this action." });
+    await expect(db.shopSettings.findUniqueOrThrow({ where: { shopId: shop.id }, select: { invoicePrefix: true } })).resolves.toEqual({ invoicePrefix: "SALE" });
   });
 
   it("allows a member to read their shop and denies another shop by ID", async () => {
@@ -435,8 +472,13 @@ describe("shop tenant isolation", () => {
     await expect(db.product.findUnique({ where: { id: openingProduct.id }, select: { stockQuantityMilli: true } })).resolves.toEqual({ stockQuantityMilli: 1_650 });
     await expect(getShopProductMovementHistory(shop.id, openingProduct.id)).resolves.toMatchObject({ total: 2, movements: [{ type: "RESTOCK", quantityDeltaMilli: 375 }, { type: "OPENING", quantityDeltaMilli: 1_275 }] });
 
-    await expect(getShopDashboardStats(shop.id)).resolves.toMatchObject({ totalSalesCents: 5_000, collectedCents: 1_000, outstandingCents: 4_000, expenseCents: 400, invoiceCount: 1, lowStockCount: 1, recentInvoices: [{ invoiceNumber: "INV-METRIC-1" }] });
-    await expect(getShopDashboardStats(otherShop.id)).resolves.toMatchObject({ totalSalesCents: 20_000, collectedCents: 15_000, outstandingCents: 5_000, expenseCents: 900, invoiceCount: 1, lowStockCount: 0, recentInvoices: [{ invoiceNumber: "INV-METRIC-2" }] });
+    const currentMonth = new Date();
+    const trendFrom = new Date(Date.UTC(currentMonth.getUTCFullYear(), currentMonth.getUTCMonth(), 1));
+    const trendTo = new Date(Date.UTC(currentMonth.getUTCFullYear(), currentMonth.getUTCMonth() + 1, 1));
+    const trendFromText = trendFrom.toISOString().slice(0, 10);
+    const trendToText = new Date(trendTo.getTime() - 86_400_000).toISOString().slice(0, 10);
+    await expect(getShopDashboardStats(shop.id, trendFromText, trendToText)).resolves.toMatchObject({ totalSalesCents: 5_000, collectedCents: 1_000, outstandingCents: 4_000, expenseCents: 400, invoiceCount: 1, lowStockCount: 1, recentInvoices: [{ invoiceNumber: "INV-METRIC-1" }], monthlySales: [{ month: trendFrom.toISOString().slice(0, 7), salesCents: 5_000, invoiceCount: 1 }] });
+    await expect(getShopDashboardStats(otherShop.id, trendFromText, trendToText)).resolves.toMatchObject({ totalSalesCents: 20_000, collectedCents: 15_000, outstandingCents: 5_000, expenseCents: 900, invoiceCount: 1, lowStockCount: 0, recentInvoices: [{ invoiceNumber: "INV-METRIC-2" }], monthlySales: [{ month: trendFrom.toISOString().slice(0, 7), salesCents: 20_000, invoiceCount: 1 }] });
   });
 
   it("stores only a hash of the opaque session token", async () => {
@@ -470,10 +512,11 @@ describe("shop tenant isolation", () => {
   });
 
   it("limits repeated authentication attempts without storing the email", async () => {
+    const windowStart = new Date("2026-10-18T12:00:00.000Z");
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      await expect(consumeAuthAttempt("login", "ratelimit@example.test")).resolves.toBe(true);
+      await expect(consumeAuthAttempt("login", "ratelimit@example.test", windowStart)).resolves.toBe(true);
     }
-    await expect(consumeAuthAttempt("login", "ratelimit@example.test")).resolves.toBe(false);
+    await expect(consumeAuthAttempt("login", "ratelimit@example.test", windowStart)).resolves.toBe(false);
 
     const entries = await db.authRateLimit.findMany({ select: { key: true } });
     expect(entries).toHaveLength(1);

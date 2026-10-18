@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { calculateInvoice } from "@/server/domain/invoices/calculate-invoice";
+import { calculateDefaultInvoiceDiscountCents, calculateInvoice } from "@/server/domain/invoices/calculate-invoice";
 import { createInvoiceAction, saveInvoiceDraftAction, type InvoiceActionState } from "./actions";
 
 type CustomerOption = { id: string; name: string };
@@ -35,6 +35,7 @@ function parseMoney(value: string): number | null {
 
 export function InvoiceForm({
   shopId,
+  shopName,
   initialRequestId,
   customers,
   products,
@@ -42,15 +43,18 @@ export function InvoiceForm({
   draft,
 }: {
   shopId: string;
+  shopName: string;
   initialRequestId: string;
   customers: CustomerOption[];
   products: ProductOption[];
   defaults: { defaultTaxRateBps: number; defaultDiscountBps: number; defaultPaymentTerms: string | null };
-  draft?: { id: string; customerId: string | null; dueAt: Date | null; notes: string | null; items: Array<{ productId: string | null; description: string; quantityMilli: number; unitPriceCents: number; discountCents: number; taxRateBps: number }> };
+  draft?: { id: string; customerId: string | null; customerName?: string | null; dueAt: Date | null; notes: string | null; items: Array<{ productId: string | null; description: string; quantityMilli: number; unitPriceCents: number; discountCents: number; taxRateBps: number }> };
 }) {
   const [state, formAction, pending] = useActionState(createInvoiceAction.bind(null, shopId), initialState);
   const [draftState, draftAction, draftPending] = useActionState(saveInvoiceDraftAction.bind(null, shopId), initialState);
   const [lines, setLines] = useState<DraftLine[]>(draft?.items.map((item) => ({ productId: item.productId ?? "", description: item.description, quantity: (item.quantityMilli / 1000).toString(), unitPrice: (item.unitPriceCents / 100).toFixed(2), discount: (item.discountCents / 100).toFixed(2), taxRate: (item.taxRateBps / 100).toString() })) ?? [blankLine(defaults.defaultTaxRateBps)]);
+  const [customerId, setCustomerId] = useState(draft?.customerId ?? "");
+  const [dueDate, setDueDate] = useState(draft?.dueAt?.toISOString().slice(0, 10) ?? "");
   const [invoiceDiscount, setInvoiceDiscount] = useState("0.00");
   const [clientError, setClientError] = useState("");
   const requestId = state.nextRequestId ?? initialRequestId;
@@ -62,17 +66,15 @@ export function InvoiceForm({
     try {
       const validLines = parsedLines.map((line) => ({ quantityMilli: line.quantityMilli!, unitPriceCents: line.unitPriceCents!, lineDiscountCents: line.lineDiscountCents!, taxRateBps: line.taxRateBps! }));
       let effectiveDiscount = requestedDiscount;
-      if (effectiveDiscount === 0 && defaults.defaultDiscountBps > 0) {
-        const eligible = validLines.reduce((sum, line) => {
-          const gross = Number((BigInt(line.unitPriceCents) * BigInt(line.quantityMilli) + 500n) / 1_000n);
-          return sum + Math.max(0, gross - line.lineDiscountCents);
-        }, 0);
-        effectiveDiscount = Number((BigInt(eligible) * BigInt(defaults.defaultDiscountBps) + 5_000n) / 10_000n);
+      if (!draft && effectiveDiscount === 0 && defaults.defaultDiscountBps > 0) {
+        effectiveDiscount = calculateDefaultInvoiceDiscountCents(validLines, defaults.defaultDiscountBps);
       }
-      return { totals: calculateInvoice({ lines: validLines, invoiceDiscountCents: effectiveDiscount }), hasDefaultDiscount: requestedDiscount === 0 && defaults.defaultDiscountBps > 0 };
+      return { totals: calculateInvoice({ lines: validLines, invoiceDiscountCents: effectiveDiscount }), hasDefaultDiscount: !draft && requestedDiscount === 0 && defaults.defaultDiscountBps > 0 };
     } catch { return null; }
   })();
   const formatUsd = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+  const selectedCustomerName = customers.find((customer) => customer.id === customerId)?.name
+    ?? (draft?.customerId === customerId ? draft.customerName : null);
 
   const setLine = (index: number, key: keyof DraftLine, value: string) => {
     setLines((current) => current.map((line, row) => row === index ? { ...line, [key]: value } : line));
@@ -109,16 +111,13 @@ export function InvoiceForm({
       setClientError("Enter a valid invoice discount.");
       return;
     }
-    if (invoiceDiscountCents === 0 && defaults.defaultDiscountBps > 0) {
-      const eligibleCents = parsedLines.reduce((sum, line) => {
-        const gross = Number((BigInt(line.unitPriceCents) * BigInt(line.quantityMilli) + 500n) / 1_000n);
-        return sum + Math.max(0, gross - line.lineDiscountCents);
-      }, 0);
-      if (!Number.isSafeInteger(eligibleCents)) {
+    if (!draft && invoiceDiscountCents === 0 && defaults.defaultDiscountBps > 0) {
+      try {
+        invoiceDiscountCents = calculateDefaultInvoiceDiscountCents(parsedLines, defaults.defaultDiscountBps);
+      } catch {
         setClientError("Invoice amount is outside the supported range.");
         return;
       }
-      invoiceDiscountCents = Number((BigInt(eligibleCents) * BigInt(defaults.defaultDiscountBps) + 5_000n) / 10_000n);
     }
     if (!requestId) {
       setClientError("Preparing secure invoice submission. Try again in a moment.");
@@ -132,21 +131,22 @@ export function InvoiceForm({
   };
 
   return (
-    <form action={submit} className="space-y-6">
+    <form action={submit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
       {draft && <input type="hidden" name="draftId" value={draft.id} />}
-      <section className="grid gap-4 rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm sm:grid-cols-2 sm:p-6">
+      <section className="grid gap-4 rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm sm:grid-cols-2 sm:p-6 lg:col-start-1">
         <label className="text-sm font-medium">Customer
-          <select name="customerId" defaultValue={draft?.customerId ?? ""} className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[#fbfcfb] px-3 py-3 text-sm shadow-sm">
+          <select name="customerId" value={customerId} onChange={(event) => setCustomerId(event.target.value)} className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[#fbfcfb] px-3 py-3 text-sm shadow-sm">
             <option value="">Walk-in customer</option>
+            {draft?.customerId && !customers.some((customer) => customer.id === draft.customerId) && <option value={draft.customerId}>{draft.customerName ?? "Current customer"}</option>}
             {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
           </select>
         </label>
         <label className="text-sm font-medium">Due date
-          <input name="dueDate" type="date" defaultValue={draft?.dueAt?.toISOString().slice(0, 10) ?? ""} className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[#fbfcfb] px-3 py-3 text-sm shadow-sm" />
+          <input name="dueDate" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[#fbfcfb] px-3 py-3 text-sm shadow-sm" />
         </label>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 lg:col-start-1">
         <div className="flex items-center justify-between gap-3">
           <div><h2 className="font-semibold tracking-tight">Invoice items</h2><p className="mt-1 text-sm text-[var(--muted)]">Add products or custom items to this invoice.</p></div>
           <button type="button" onClick={() => setLines((current) => [...current, blankLine(defaults.defaultTaxRateBps)])} disabled={lines.length >= 100} className="rounded-xl border border-[var(--line)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--forest)] shadow-sm transition hover:bg-[#edf6df] disabled:opacity-50">+ Add item</button>
@@ -194,37 +194,51 @@ export function InvoiceForm({
         ))}
       </section>
 
-      <section className="grid gap-4 rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm sm:grid-cols-2 sm:p-6">
+      <section className="grid gap-4 rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm sm:grid-cols-2 sm:p-6 lg:col-start-1">
         <label className="text-sm font-medium">Invoice discount (USD)
           <input name="invoiceDiscount" type="number" min="0" step="0.01" value={invoiceDiscount} onChange={(event) => setInvoiceDiscount(event.target.value)} required className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[#fbfcfb] px-3 py-3 text-sm shadow-sm" />
+          {draft && <span className="mt-1 block text-xs font-normal text-[var(--muted)]">Saved draft discounts are already allocated across the item lines.</span>}
         </label>
         <label className="text-sm font-medium">Notes
           <input name="notes" defaultValue={draft?.notes ?? defaults.defaultPaymentTerms ?? ""} maxLength={2_000} className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[#fbfcfb] px-3 py-3 text-sm shadow-sm" />
         </label>
       </section>
 
-      <section aria-live="polite" className="overflow-hidden rounded-2xl border border-[var(--forest)] bg-[var(--forest)] p-5 text-white shadow-md sm:p-6">
-        <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Invoice summary</h2><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/80">USD</span></div>
+      <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-sm sm:p-6 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-28">
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--line)] pb-4">
+          <div><p className="truncate text-xs font-semibold uppercase tracking-[0.12em] text-[var(--forest)]">{shopName}</p><h2 className="mt-2 text-xl font-semibold tracking-tight">Invoice preview</h2></div>
+          <span className="rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--muted)]">USD</span>
+        </div>
+        <div className="grid gap-3 border-b border-[var(--line)] py-4 text-sm sm:grid-cols-2 lg:grid-cols-1">
+          <div><p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Bill to</p><p className="mt-1 font-medium">{selectedCustomerName ?? (customerId ? "Current customer" : "Walk-in customer")}</p></div>
+          <div><p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">Due date</p><p className="mt-1 font-medium">{dueDate || "Not set"}</p></div>
+        </div>
         {preview ? <>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between gap-4"><dt className="text-white/70">Subtotal</dt><dd>{formatUsd(preview.totals.subtotalCents)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-white/70">Discounts</dt><dd>−{formatUsd(preview.totals.discountCents)}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-white/70">Tax</dt><dd>{formatUsd(preview.totals.taxCents)}</dd></div>
-            <div className="mt-3 flex items-end justify-between gap-4 border-t border-white/20 pt-4"><dt className="text-sm font-medium text-white/75">Total due</dt><dd className="text-3xl font-semibold tracking-tight text-[#d2f58a]">{formatUsd(preview.totals.totalCents)}</dd></div>
+          <div className="space-y-3 border-b border-[var(--line)] py-4">
+            {lines.map((line, index) => <div key={index} className="flex justify-between gap-3 text-sm">
+              <div className="min-w-0"><p className="truncate font-medium">{line.description.trim() || `Item ${index + 1}`}</p><p className="text-xs text-[var(--muted)]">{line.quantity} × {formatUsd(parseMoney(line.unitPrice) ?? 0)}</p></div>
+              <p className="shrink-0 font-medium">{formatUsd(preview.totals.lines[index].totalCents)}</p>
+            </div>)}
+          </div>
+          <dl className="space-y-2 py-4 text-sm">
+            <div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Subtotal</dt><dd>{formatUsd(preview.totals.subtotalCents)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Discounts</dt><dd>−{formatUsd(preview.totals.discountCents)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-[var(--muted)]">Tax</dt><dd>{formatUsd(preview.totals.taxCents)}</dd></div>
+            <div className="flex items-end justify-between gap-3 border-t border-[var(--line)] pt-3"><dt className="font-semibold">Total due</dt><dd aria-live="polite" aria-atomic="true" className="text-2xl font-semibold tracking-tight text-[var(--forest)]">{formatUsd(preview.totals.totalCents)}</dd></div>
           </dl>
-          {preview.hasDefaultDiscount && <p className="mt-3 text-xs text-white/65">The shop’s default discount is included while the invoice discount is zero.</p>}
-        </> : <p className="mt-3 text-sm text-white/75">Check the quantities, prices, discounts, and tax rates. The total will appear when they are valid.</p>}
+          {preview.hasDefaultDiscount && <p className="rounded-lg bg-[#edf6df] p-3 text-xs leading-5 text-[var(--forest)]">The shop’s default discount is included while the invoice discount is zero.</p>}
+        </> : <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm leading-5 text-amber-900">Check quantities, prices, discounts, and tax rates. The preview total appears when the values are valid.</p>}
       </section>
 
-      <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">Finalizing records this invoice and deducts tracked product stock. Review the items and total before you continue.</p>
-      {clientError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{clientError}</p>}
-      {state.error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{state.error}</p>}
-      {draftState.error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{draftState.error}</p>}
-      {draftState.success && <p role="status" className="rounded-lg bg-[#edf6df] px-3 py-2 text-sm text-[var(--forest)]">{draftState.success}{draftState.invoiceId && <> <a className="font-semibold underline" href={`/dashboard/shops/${shopId}/invoices/${draftState.invoiceId}`}>{draftState.invoiceNumber} · View draft</a></>}</p>}
-      {state.success && <p role="status" className="rounded-lg bg-[#edf6df] px-3 py-2 text-sm text-[var(--forest)]">
+      <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 lg:col-start-1">Finalizing records this invoice and deducts tracked product stock. Review the items and total before you continue.</p>
+      {clientError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 lg:col-start-1">{clientError}</p>}
+      {state.error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 lg:col-start-1">{state.error}</p>}
+      {draftState.error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 lg:col-start-1">{draftState.error}</p>}
+      {draftState.success && <p role="status" className="rounded-lg bg-[#edf6df] px-3 py-2 text-sm text-[var(--forest)] lg:col-start-1">{draftState.success}{draftState.invoiceId && <> <a className="font-semibold underline" href={`/dashboard/shops/${shopId}/invoices/${draftState.invoiceId}`}>{draftState.invoiceNumber} · View draft</a></>}</p>}
+      {state.success && <p role="status" className="rounded-lg bg-[#edf6df] px-3 py-2 text-sm text-[var(--forest)] lg:col-start-1">
         {state.success}{state.invoiceNumber && state.invoiceId && <> <a className="font-semibold underline" href={`/dashboard/shops/${shopId}/invoices/${state.invoiceId}`}>{state.invoiceNumber} · View invoice</a></>}
       </p>}
-      <div className="flex flex-wrap gap-3"><button name="intent" value="draft" disabled={draftPending} className="rounded-xl border border-[var(--line)] bg-white px-5 py-3 font-semibold text-[var(--forest)] shadow-sm transition hover:bg-[#f5f8f5] disabled:opacity-60">{draftPending ? "Saving…" : draft ? "Save draft changes" : "Save as draft"}</button><button name="intent" value="finalize" disabled={pending || !requestId} className="rounded-xl bg-[var(--forest)] px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-[#20573d] disabled:opacity-60">{pending ? "Finalizing…" : "Finalize invoice"}</button></div>
+      <div className="flex flex-wrap gap-3 lg:col-start-1"><button name="intent" value="draft" disabled={draftPending} className="rounded-xl border border-[var(--line)] bg-white px-5 py-3 font-semibold text-[var(--forest)] shadow-sm transition hover:bg-[#f5f8f5] disabled:opacity-60">{draftPending ? "Saving…" : draft ? "Save draft changes" : "Save as draft"}</button><button name="intent" value="finalize" disabled={pending || !requestId} className="rounded-xl bg-[var(--forest)] px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-[#20573d] disabled:opacity-60">{pending ? "Finalizing…" : "Finalize invoice"}</button></div>
     </form>
   );
 }

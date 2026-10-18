@@ -12,6 +12,19 @@ export type InvoiceCalculationInput = {
   invoiceDiscountCents?: number;
 };
 
+/** Apply a shop's default percentage discount to the amount left after line discounts. */
+export function calculateDefaultInvoiceDiscountCents(
+  lines: InvoiceCalculationInput["lines"],
+  discountBps: number,
+): number {
+  assertSafeInteger("Default discount rate", discountBps, 0);
+  if (discountBps > 10_000) throw new RangeError("Default discount rate cannot exceed 10000 basis points.");
+
+  const base = calculateInvoice({ lines });
+  const eligibleCents = BigInt(base.subtotalCents - base.lineDiscountCents);
+  return asSafeNumber((eligibleCents * BigInt(discountBps) + BigInt(5_000)) / BPS_SCALE, "Default invoice discount");
+}
+
 export type CalculatedInvoiceLine = {
   grossCents: number;
   lineDiscountCents: number;

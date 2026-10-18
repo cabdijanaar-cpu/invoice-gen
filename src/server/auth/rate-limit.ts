@@ -13,8 +13,7 @@ function getHashedKey(action: "login" | "register" | "password-reset", identifie
   return createHmac("sha256", secret).update(`${action}:${identifier}`).digest("hex");
 }
 
-export async function consumeAuthAttempt(action: "login" | "register" | "password-reset", identifier: string): Promise<boolean> {
-  const now = new Date();
+export async function consumeAuthAttempt(action: "login" | "register" | "password-reset", identifier: string, now = new Date()): Promise<boolean> {
   const windowStartedAt = new Date(Math.floor(now.getTime() / WINDOW_MS) * WINDOW_MS);
   const key = getHashedKey(action, identifier);
 

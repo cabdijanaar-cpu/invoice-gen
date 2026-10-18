@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { requireShopMembership } from "@/server/auth/session";
 import { getShopInvoice, listInvoiceOptions, listShopInvoices } from "@/server/shops/invoices";
 import { InvoiceForm } from "./invoice-form";
+import { WorkspacePageHeader } from "../workspace-page-header";
 
 function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -16,16 +17,9 @@ export default async function InvoicesPage({ params, searchParams }: { params: P
   const draft = candidateDraft?.status === "DRAFT" ? candidateDraft : undefined;
 
   return (
-    <main className="min-h-screen bg-[#f1f5f2] px-4 py-6 sm:px-8 sm:py-9">
-      <div className="mx-auto max-w-5xl">
-        <header className="mt-5 flex flex-wrap items-end justify-between gap-4 rounded-3xl border border-white bg-white px-5 py-6 shadow-sm sm:px-7">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">{membership.shop.name}</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--ink)]">Invoices</h1>
-            <p className="mt-1 text-sm text-[var(--muted)]">Create, review, and keep track of customer invoices.</p>
-          </div>
-          <span className="rounded-full bg-[#edf6df] px-3 py-1.5 text-xs font-semibold text-[var(--forest)]">INVOICE WORKSPACE</span>
-        </header>
+    <main className="min-h-screen px-4 py-7 sm:px-8 sm:py-10">
+      <div className="mx-auto max-w-6xl">
+        <WorkspacePageHeader shopName={membership.shop.name} title="Invoices" description="Create, review, and keep track of customer invoices." badge="Invoice workspace" />
         <div className="mt-6 grid gap-8">
           <section className="order-2">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -50,7 +44,7 @@ export default async function InvoicesPage({ params, searchParams }: { params: P
           </section>
           <section className="order-1">
             <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--forest)]">New document</p><h2 className="mt-1 text-xl font-semibold tracking-tight">{draft ? `Edit draft ${draft.invoiceNumber}` : "Create invoice"}</h2><p className="mt-1 text-sm text-[var(--muted)]">Add a customer and invoice items, then review the total.</p></div>
-          <InvoiceForm shopId={shopId} initialRequestId={randomUUID()} customers={options.customers} products={options.products} defaults={options.defaults} draft={draft} />
+          <InvoiceForm shopId={shopId} shopName={membership.shop.name} initialRequestId={randomUUID()} customers={options.customers} products={options.products} defaults={options.defaults} draft={draft ? { ...draft, customerName: draft.customer?.name ?? null } : undefined} />
           </section>
         </div>
         {options.customers.length === 100 || options.products.length === 100 ? <p className="mt-5 text-xs text-[var(--muted)]">Product and customer selectors currently show at most 100 records.</p> : null}

@@ -1,6 +1,6 @@
 # Database design
 
-**Status:** The Prisma datasource targets PostgreSQL for Supabase. The checked-in baseline at `prisma/migrations/20261016180000_supabase_postgresql_baseline/` has been applied to the configured app project and Prisma reports the schema is up to date. All 44 tests across 9 files passed against a separate disposable Supabase test project. That project uses a session-pooler connection with `connection_limit=1`; the test runner still requires explicit reset confirmation. Never point its destructive preparation step at the application schema. Prior SQLite migrations are preserved in `prisma/sqlite-migrations-archive/` and are not part of the active migration history.
+**Status:** The Prisma datasource targets PostgreSQL for Supabase. The checked-in baseline at `prisma/migrations/20261016180000_supabase_postgresql_baseline/` has been applied to the configured app project and Prisma reports the schema is up to date. All 57 tests across 11 files passed against a separate disposable Supabase test project. That project uses a session-pooler connection with `connection_limit=1`; the test runner still requires explicit reset confirmation. Invoice finalization sets a 30-second interactive transaction timeout to accommodate the multi-write operation on this remote pooler. Never point its destructive preparation step at the application schema. Prior SQLite migrations are preserved in `prisma/sqlite-migrations-archive/` and are not part of the active migration history.
 
 ## Entity map
 

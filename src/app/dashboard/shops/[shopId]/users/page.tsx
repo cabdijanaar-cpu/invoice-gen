@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { requireShopMembership } from "@/server/auth/session";
 import { getShopEntitlement } from "@/server/platform/entitlements";
 import { listShopMembers } from "@/server/shops/members";
 import { addShopMemberAction, updateShopMemberAction } from "./actions";
+import { WorkspacePageHeader } from "../workspace-page-header";
 
 const permissions = [
   ["canViewReports", "View reports"],
@@ -21,9 +21,8 @@ export default async function ShopUsersPage({ params, searchParams }: { params: 
   const entitlement = canManage ? await getShopEntitlement(shopId) : null;
   const activeMembers = members.filter((m) => m.status === "ACTIVE").length;
 
-  return <main className="min-h-screen px-5 py-8 sm:px-10"><div className="mx-auto max-w-5xl">
-    <Link href={`/dashboard/shops/${shopId}`} className="text-sm text-[var(--forest)]">← {membership.shop.name}</Link>
-    <header className="my-5 border-b border-[var(--line)] pb-5"><h1 className="text-2xl font-semibold">Staff and permissions</h1><p className="mt-1 text-sm text-[var(--muted)]">Add registered accounts to this shop and control their access.</p></header>
+  return <main className="min-h-screen px-4 py-7 sm:px-8 sm:py-10"><div className="mx-auto max-w-6xl">
+    <WorkspacePageHeader shopName={membership.shop.name} title="Staff and permissions" description="Add registered accounts to this shop and control their access." badge={canManage ? `${activeMembers} active members` : "Staff access restricted"} />
     {query.message && <p role="status" className="mb-4 rounded-xl bg-[#edf6df] p-3 text-sm">{query.message}</p>}
     {query.error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{query.error}</p>}
     {!canManage ? <p className="rounded-xl border border-[var(--line)] bg-white p-5 text-sm">You do not have permission to manage staff in this shop.</p> : <>
