@@ -27,11 +27,9 @@ export default async function ProductsPage({ params, searchParams }: { params: P
   return (
     <main className="min-h-screen px-5 py-8 sm:px-10">
       <div className="mx-auto max-w-6xl">
-        <div className="flex gap-4 text-sm font-medium text-[var(--forest)]"><Link href="/dashboard">← Your shops</Link><Link href={`/dashboard/shops/${shopId}/customers`}>Customers</Link><Link href={`/dashboard/shops/${shopId}/invoices`}>Invoices</Link></div>
-        <header className="mt-5 border-b border-[var(--line)] pb-5">
-          <p className="text-sm text-[var(--muted)]">{membership.shop.name}</p>
-          <h1 className="mt-1 text-2xl font-semibold">Products & inventory</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">{result.total} products found</p>
+        <header className="mt-5 flex flex-wrap items-end justify-between gap-3 rounded-3xl border border-white bg-white px-5 py-5 shadow-sm sm:px-7">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--forest)]">{membership.shop.name}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Products &amp; inventory</h1><p className="mt-1 text-sm text-[var(--muted)]">Manage pricing, availability, and stock movement.</p></div>
+          <span className="rounded-full bg-[#edf6df] px-3 py-1.5 text-xs font-semibold text-[var(--forest)]">{result.total} products</span>
         </header>
         <div className="mt-6 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
           {canManage ? <ProductForm shopId={shopId} /> : <p className="rounded-2xl border border-[var(--line)] bg-white p-5 text-sm text-[var(--muted)]">You can view inventory but do not have permission to add products.</p>}

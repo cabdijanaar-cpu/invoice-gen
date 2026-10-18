@@ -19,7 +19,7 @@ export default function HomePage() {
           <h1 className="max-w-2xl text-5xl font-semibold leading-[1.08] tracking-[-0.045em] sm:text-6xl">Invoices and daily operations, <span className="text-[var(--forest)]">kept in order.</span></h1>
           <p className="mt-6 max-w-xl text-lg leading-8 text-[var(--muted)]">A multi-store platform for creating invoices, following customer balances, and keeping an eye on inventory.</p>
           <div className="mt-9 flex flex-wrap gap-3">
-            <Link href="/login" className="rounded-xl bg-[var(--forest)] px-5 py-3 font-medium text-white shadow-sm">Sign in <span aria-hidden="true">→</span></Link>
+            <Link href="/login" className="rounded-xl bg-[var(--forest)] px-5 py-3 font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">Sign in <span aria-hidden="true">→</span></Link>
             <Link href="/register" className="rounded-xl border border-[var(--line)] bg-white px-5 py-3 font-medium">Create an account</Link>
           </div>
           <p className="mt-4 text-sm text-[var(--muted)]">English · USD · Built for independent shops</p>
@@ -33,7 +33,7 @@ export default function HomePage() {
           <div className="grid grid-cols-2 gap-3 py-5">
             {["Invoices", "Customers", "Products & stock", "Reports"].map((item, index) => (
               <div className="rounded-2xl bg-[var(--surface)] p-4" key={item}>
-                <div className="mb-5 grid size-9 place-items-center rounded-xl bg-white text-[var(--forest)]">{["▤", "♙", "▦", "↗"][index]}</div>
+                <div className="mb-5 grid size-9 place-items-center rounded-xl bg-white text-xs font-semibold text-[var(--forest)]">{String(index + 1).padStart(2, "0")}</div>
                 <p className="font-medium">{item}</p>
                 <p className="mt-1 text-xs text-[var(--muted)]">Shop-scoped workspace</p>
               </div>

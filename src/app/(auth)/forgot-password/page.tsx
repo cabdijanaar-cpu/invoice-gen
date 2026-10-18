@@ -12,7 +12,7 @@ export default function ForgotPasswordPage() {
   return (
     <main className="grid min-h-screen place-items-center px-5 py-10">
       <section className="w-full max-w-md rounded-3xl border border-[var(--line)] bg-white p-7 shadow-sm sm:p-9">
-        <Link href="/login" className="text-sm font-semibold text-[var(--forest)]">â† Back to sign in</Link>
+        <Link href="/login" className="text-sm font-semibold text-[var(--forest)]">← Back to sign in</Link>
         <h1 className="mt-8 text-3xl font-semibold tracking-tight">Reset your password</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">Enter the email address on your account. If it matches, we will email a secure reset link.</p>
         <form action={action} className="mt-7 space-y-4">
